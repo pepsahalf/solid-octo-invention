@@ -11,6 +11,7 @@ const BOT_TOKEN = process.env.BOT_TOKEN || '8709224223:AAGU74o3Wh1oHFdAK24cpXQwi
 const MONGODB_URI = process.env.MONGODB_URI;
 
 let isDbConnected = false;
+let cachedDb = null;
 
 function generateSessionToken() {
     return crypto.randomBytes(16).toString('hex');
@@ -97,17 +98,30 @@ async function seedAdmin() {
     }
 }
 
-if (MONGODB_URI) {
-    mongoose.connect(MONGODB_URI)
-        .then(async () => {
-            isDbConnected = true;
-            console.log('Успешное подключение к MongoDB');
-            await seedAdmin();
-        })
-        .catch(err => {
-            console.error('Ошибка подключения к MongoDB:', err);
-        });
+// Оптимизированное подключение к БД для Serverless-сред
+async function connectToDatabase() {
+    if (cachedDb) {
+        return cachedDb;
+    }
+    if (!MONGODB_URI) {
+        return null;
+    }
+    const db = await mongoose.connect(MONGODB_URI);
+    isDbConnected = true;
+    cachedDb = db;
+    await seedAdmin(); // Гарантируем создание админа при первом подключении
+    return db;
 }
+
+// Промежуточный обработчик для перехвата и удержания запросов до соединения с БД
+app.use(async (req, res, next) => {
+    try {
+        await connectToDatabase();
+    } catch (e) {
+        console.error('Сбой подключения к базе данных:', e);
+    }
+    next();
+});
 
 async function getSystemState() {
     if (isDbConnected) {
