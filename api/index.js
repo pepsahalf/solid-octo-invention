@@ -98,7 +98,6 @@ async function seedAdmin() {
     }
 }
 
-// Оптимизированное подключение к БД для Serverless-сред
 async function connectToDatabase() {
     if (cachedDb) {
         return cachedDb;
@@ -109,11 +108,10 @@ async function connectToDatabase() {
     const db = await mongoose.connect(MONGODB_URI);
     isDbConnected = true;
     cachedDb = db;
-    await seedAdmin(); // Гарантируем создание админа при первом подключении
+    await seedAdmin();
     return db;
 }
 
-// Промежуточный обработчик для перехвата и удержания запросов до соединения с БД
 app.use(async (req, res, next) => {
     try {
         await connectToDatabase();
@@ -167,7 +165,7 @@ function verifyTelegramHash(authData, botToken) {
     return calculatedHash === hash;
 }
 
-app.get('/api/data', async (req, res) => {
+app.get(['/data', '/api/data'], async (req, res) => {
     try {
         const state = await getSystemState();
         let arts = [];
@@ -190,7 +188,7 @@ app.get('/api/data', async (req, res) => {
     }
 });
 
-app.post('/api/login', async (req, res) => {
+app.post(['/login', '/api/login'], async (req, res) => {
     try {
         const { name, pass } = req.body;
         let user = null;
@@ -218,7 +216,7 @@ app.post('/api/login', async (req, res) => {
     }
 });
 
-app.post('/api/login-tg', async (req, res) => {
+app.post(['/login-tg', '/api/login-tg'], async (req, res) => {
     try {
         const authData = req.body;
         const isValid = verifyTelegramHash(authData, BOT_TOKEN);
@@ -275,7 +273,7 @@ app.post('/api/login-tg', async (req, res) => {
     }
 });
 
-app.post('/api/articles', async (req, res) => {
+app.post(['/articles', '/api/articles'], async (req, res) => {
     try {
         const { sessionToken, id, title, cat, cover, content, isFeatured, tags } = req.body;
         const user = await verifySession(sessionToken);
@@ -334,7 +332,7 @@ app.post('/api/articles', async (req, res) => {
     }
 });
 
-app.post('/api/articles/rate', async (req, res) => {
+app.post(['/articles/rate', '/api/articles/rate'], async (req, res) => {
     try {
         const { id, voterId, val } = req.body;
         const score = parseInt(val);
@@ -365,7 +363,7 @@ app.post('/api/articles/rate', async (req, res) => {
     }
 });
 
-app.post('/api/admin/data', async (req, res) => {
+app.post(['/admin/data', '/api/admin/data'], async (req, res) => {
     try {
         const { sessionToken } = req.body;
         const user = await verifySession(sessionToken);
@@ -398,7 +396,7 @@ app.post('/api/admin/data', async (req, res) => {
     }
 });
 
-app.post('/api/articles/moderate', async (req, res) => {
+app.post(['/articles/moderate', '/api/articles/moderate'], async (req, res) => {
     try {
         const { sessionToken, id, status } = req.body;
         const user = await verifySession(sessionToken);
@@ -428,7 +426,7 @@ app.post('/api/articles/moderate', async (req, res) => {
     }
 });
 
-app.post('/api/rules', async (req, res) => {
+app.post(['/rules', '/api/rules'], async (req, res) => {
     try {
         const { sessionToken, rules } = req.body;
         const user = await verifySession(sessionToken);
@@ -449,7 +447,7 @@ app.post('/api/rules', async (req, res) => {
     }
 });
 
-app.post('/api/users/save', async (req, res) => {
+app.post(['/users/save', '/api/users/save'], async (req, res) => {
     try {
         const { sessionToken, targetUserId, name, userPass, role, allowedCategory } = req.body;
         const admin = await verifySession(sessionToken);
@@ -490,7 +488,7 @@ app.post('/api/users/save', async (req, res) => {
     }
 });
 
-app.post('/api/users/delete', async (req, res) => {
+app.post(['/users/delete', '/api/users/delete'], async (req, res) => {
     try {
         const { sessionToken, targetUserId } = req.body;
         const admin = await verifySession(sessionToken);
@@ -515,7 +513,7 @@ app.post('/api/users/delete', async (req, res) => {
     }
 });
 
-app.post('/api/cats/add', async (req, res) => {
+app.post(['/cats/add', '/api/cats/add'], async (req, res) => {
     try {
         const { sessionToken, catName } = req.body;
         const user = await verifySession(sessionToken);
@@ -536,7 +534,7 @@ app.post('/api/cats/add', async (req, res) => {
     }
 });
 
-app.post('/api/cats/delete', async (req, res) => {
+app.post(['/cats/delete', '/api/cats/delete'], async (req, res) => {
     try {
         const { sessionToken, catName } = req.body;
         const user = await verifySession(sessionToken);
@@ -561,7 +559,7 @@ app.post('/api/cats/delete', async (req, res) => {
     }
 });
 
-app.post('/api/tags/add', async (req, res) => {
+app.post(['/tags/add', '/api/tags/add'], async (req, res) => {
     try {
         const { sessionToken, tagName } = req.body;
         const user = await verifySession(sessionToken);
@@ -584,7 +582,7 @@ app.post('/api/tags/add', async (req, res) => {
     }
 });
 
-app.post('/api/tags/delete', async (req, res) => {
+app.post(['/tags/delete', '/api/tags/delete'], async (req, res) => {
     try {
         const { sessionToken, tagName } = req.body;
         const user = await verifySession(sessionToken);
@@ -610,7 +608,7 @@ app.post('/api/tags/delete', async (req, res) => {
     }
 });
 
-app.post('/api/heart/save', async (req, res) => {
+app.post(['/heart/save', '/api/heart/save'], async (req, res) => {
     try {
         const { sessionToken, hp, act, size } = req.body;
         const user = await verifySession(sessionToken);
