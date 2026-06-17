@@ -1,4 +1,3 @@
-
 <!DOCTYPE html>
 <html lang="ru">
 <head>
@@ -246,7 +245,6 @@
         
         .tag-section-title { font-family: 'Unbounded', sans-serif; color: #fff; font-size: 1.2rem; font-weight: 700; margin: 20px 0 10px 0; }
         .tag-pill-editor { background-color: #1a1414; color: #a19595; padding: 8px 16px; border-radius: 8px; font-size: 0.85rem; font-weight: 700; cursor: pointer; transition: 0.2s; border: 1px solid #291e1e; display: inline-block; margin: 5px; font-family: 'Unbounded', sans-serif; }
-        .tag-pill-editor:hover { background-color: #2b1f1f; color: #fff; border-color: #4a3636; }
         .tag-pill-editor.selected { background-color: #240a0a; color: #d11515; border-color: #4a1313; }
         .tag-pill-editor.selected:hover { background-color: #381010; border-color: #d11515; }
 
@@ -346,82 +344,14 @@
             background: linear-gradient(180deg, #e3a814 0%, #b88106 100%);
         }
 
-        .email-simulation-toast {
-            position: fixed;
-            bottom: 30px;
-            right: 30px;
-            background: linear-gradient(135deg, #1a0808 0%, #050303 100%);
-            border: 1px solid var(--accent-red);
-            border-left: 5px solid var(--accent-red);
-            padding: 20px 25px;
-            border-radius: 12px;
-            box-shadow: 0 15px 40px rgba(0,0,0,0.95), 0 0 20px rgba(209,21,21,0.25);
-            z-index: 10000;
-            max-width: 440px;
-            font-family: 'Inter', sans-serif;
-            display: none;
-        }
-        .toast-show {
-            display: block;
-            animation: slideInRight 0.5s cubic-bezier(0.16, 1, 0.3, 1) forwards;
-        }
-        .toast-hide {
-            animation: slideOutRight 0.4s cubic-bezier(0.16, 1, 0.3, 1) forwards;
-        }
-        @keyframes slideInRight {
-            from { transform: translateX(120%); opacity: 0; }
-            to { transform: translateX(0); opacity: 1; }
-        }
-        @keyframes slideOutRight {
-            from { transform: translateX(0); opacity: 1; }
-            to { transform: translateX(120%); opacity: 0; }
-        }
-
-        .ql-toolbar { background: #080505; border-color: var(--border-subtle) !important; border-radius: 10px 10px 0 0; }
-        .ql-container { background: #050303; border-color: var(--border-subtle) !important; color: #fff; font-size: 1.15rem; border-radius: 0 0 10px 10px; font-family: 'Inter', sans-serif;}
-        .image-preview { width: 100%; max-height: 350px; object-fit: cover; border-radius: 12px; margin-top: 15px; display: none; border: 1px solid var(--border-subtle); box-shadow: 0 10px 30px rgba(0,0,0,0.8);}
-        
-        .ql-snow .ql-picker.ql-font .ql-picker-label::before, .ql-snow .ql-picker.ql-font .ql-picker-item::before { content: 'Inter'; font-family: 'Inter', sans-serif; }
-        .ql-snow .ql-picker.ql-font .ql-picker-label[data-value="unbounded"]::before, .ql-snow .ql-picker.ql-font .ql-picker-item[data-value="unbounded"]::before { content: 'Unbounded'; font-family: 'Unbounded', sans-serif; }
-        .ql-snow .ql-picker.ql-font .ql-picker-label[data-value="actor"]::before, .ql-snow .ql-picker.ql-font .ql-picker-item[data-value="actor"]::before { content: 'Actor'; font-family: 'Actor', sans-serif; }
-        .ql-snow .ql-picker.ql-font .ql-picker-label[data-value="monomakh"]::before, .ql-snow .ql-picker.ql-font .ql-picker-item[data-value="monomakh"]::before { content: 'Monomakh'; font-family: 'Monomakh', serif; }
-
-        .view-section { display: none; }
-        .view-section.active { display: block; animation: fadeUp 0.5s cubic-bezier(0.16, 1, 0.3, 1); }
-        @keyframes fadeUp { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
-        ::-webkit-scrollbar { width: 10px; } ::-webkit-scrollbar-track { background: var(--bg-body); } ::-webkit-scrollbar-thumb { background: #241a1a; border-radius: 5px; border: 2px solid var(--bg-body);} ::-webkit-scrollbar-thumb:hover { background: #4a1515; }
-
-        .btn-support-flesh {
-            font-family: 'Unbounded', sans-serif;
-            background: linear-gradient(135deg, #1f0505 0%, #d11515 100%);
-            border: 1px solid #700606;
-            color: #fff !important;
-            padding: 10px 20px;
-            border-radius: 8px;
-            font-size: 0.8rem;
-            font-weight: 700;
-            text-transform: uppercase;
-            letter-spacing: 1px;
-            box-shadow: 0 4px 15px rgba(209, 21, 21, 0.3);
-            transition: all 0.3s ease;
-            cursor: pointer;
-            text-align: center;
-            display: inline-flex;
-            align-items: center;
-            gap: 8px;
-        }
-        .btn-support-flesh:hover {
-            background: linear-gradient(135deg, #300808 0%, #f01a1a 100%);
-            box-shadow: 0 6px 20px rgba(209, 21, 21, 0.5);
-            transform: translateY(-2px);
-        }
-        
         .flesh-modal-overlay {
             position: fixed; top: 0; left: 0; right: 0; bottom: 0;
             background: rgba(0,0,0,0.85); backdrop-filter: blur(8px);
             z-index: 1050; display: none; align-items: center; justify-content: center;
         }
-        .flesh-modal-overlay.active { display: flex; }
+        /* Добавлено принудительное отображение для предотвращения конфликтов с Bootstrap */
+        .flesh-modal-overlay.active { display: flex !important; }
+        
         .flesh-modal {
             background: #0d0808; border: 2px solid #521616; border-radius: 16px;
             width: 90%; max-width: 500px; padding: 35px; box-shadow: 0 20px 50px rgba(0,0,0,0.9);
@@ -1438,8 +1368,7 @@
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
-                        username: activeUser.name,
-                        pass: activeUser.pass,
+                        sessionToken: activeUser.sessionToken, // Отправляем безопасный токен сессии вместо пароля
                         id, title, cat, cover, content, isFeatured, tags: tagsArr
                     })
                 });
@@ -1456,7 +1385,7 @@
                 }
             } catch (error) {
                 console.error(error);
-                alert('Ошибка отправки на server.');
+                alert('Ошибка отправки на сервер.');
             }
         }
 
@@ -1479,8 +1408,7 @@
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
-                        username: activeUser.name,
-                        pass: activeUser.pass,
+                        sessionToken: activeUser.sessionToken,
                         rules: rHtml
                     })
                 });
@@ -1502,7 +1430,7 @@
                 const response = await fetch(`${API_BASE}/api/admin/data`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ name: activeUser.name, pass: activeUser.pass })
+                    body: JSON.stringify({ sessionToken: activeUser.sessionToken })
                 });
                 const adminData = await response.json();
 
@@ -1597,8 +1525,7 @@
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
-                        username: activeUser.name,
-                        pass: activeUser.pass,
+                        sessionToken: activeUser.sessionToken,
                         targetUserId: id,
                         name: n,
                         userPass: p,
@@ -1624,7 +1551,7 @@
                 await fetch(`${API_BASE}/api/articles/moderate`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ username: activeUser.name, pass: activeUser.pass, id, status })
+                    body: JSON.stringify({ sessionToken: activeUser.sessionToken, id, status })
                 });
                 await fetchServerData();
                 renderAdmin();
@@ -1640,7 +1567,7 @@
                     await fetch(`${API_BASE}/api/cats/add`, {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ username: activeUser.name, pass: activeUser.pass, catName: v })
+                        body: JSON.stringify({ sessionToken: activeUser.sessionToken, catName: v })
                     });
                     document.getElementById('new-cat-name').value = '';
                     await fetchServerData();
@@ -1657,7 +1584,7 @@
                     await fetch(`${API_BASE}/api/cats/delete`, {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ username: activeUser.name, pass: activeUser.pass, catName: c })
+                        body: JSON.stringify({ sessionToken: activeUser.sessionToken, catName: c })
                     });
                     await fetchServerData();
                     renderAdmin();
@@ -1674,7 +1601,7 @@
                     await fetch(`${API_BASE}/api/tags/add`, {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ username: activeUser.name, pass: activeUser.pass, tagName: v })
+                        body: JSON.stringify({ sessionToken: activeUser.sessionToken, tagName: v })
                     });
                     document.getElementById('new-tag-name').value = '';
                     await fetchServerData();
@@ -1691,7 +1618,7 @@
                     await fetch(`${API_BASE}/api/tags/delete`, {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ username: activeUser.name, pass: activeUser.pass, tagName: t })
+                        body: JSON.stringify({ sessionToken: activeUser.sessionToken, tagName: t })
                     });
                     await fetchServerData();
                     renderAdmin();
@@ -1710,7 +1637,7 @@
                 await fetch(`${API_BASE}/api/heart/save`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ username: activeUser.name, pass: activeUser.pass, hp, act, size })
+                    body: JSON.stringify({ sessionToken: activeUser.sessionToken, hp, act, size })
                 });
                 await fetchServerData();
                 renderAdmin();
@@ -1726,7 +1653,7 @@
                     await fetch(`${API_BASE}/api/users/delete`, {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ username: activeUser.name, pass: activeUser.pass, targetUserId: id })
+                        body: JSON.stringify({ sessionToken: activeUser.sessionToken, targetUserId: id })
                     });
                     await fetchServerData();
                     renderAdmin();
