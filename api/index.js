@@ -4,16 +4,21 @@ const crypto = require('crypto');
 const mongoose = require('mongoose');
 
 const app = express();
-app.use(express.json({ limit: '10mb' })); // Позволяет загружать обложки статей в формате Base64
+app.use(express.json({ limit: '10mb' })); 
 app.use(cors());
 
-// Токен вашего бота (также можно задать через панель Vercel в переменных окружения как BOT_TOKEN)
+// Токен вашего бота и адрес базы данных
 const BOT_TOKEN = process.env.BOT_TOKEN || '8709224223:AAGU74o3Wh1oHFdAK24cpXQwiGO725_S4aM';
 const MONGODB_URI = process.env.MONGODB_URI;
 
 let isDbConnected = false;
 
-// Локальное хранилище данных (используется как резерв, если нет подключения к MongoDB)
+// Генератор случайных безопасных токенов сессий
+function generateSessionToken() {
+    return crypto.randomBytes(16).toString('hex');
+}
+
+// Локальное хранилище данных (резерв на случай отсутствия MongoDB)
 let localDb = {
     cats: ['Главная', 'Архив', 'Ритуалы', 'Существа', 'История', 'Рассказы', 'Термины', 'Артефакты'],
     availableTags: ['сущность', 'аномалия', 'растение', 'опасность', 'локация', 'ритуал', 'еда', 'животное', 'люди', 'Fonés', 'Кораст'],
@@ -34,23 +39,9 @@ let localDb = {
     heart: { hp: 98.7, act: 'Высокая', size: 8 },
     rules: '<h1>Правила сообщества</h1><p>1. Уважайте структуру генофонда.<br>2. Все созидаемые статьи подлежат обязательной цензуре суперадмина.</p>',
     users: [
-        { id: 1, name: 'admin', pass: 'admin', role: 'admin', allowedCategory: '*' }
+        { id: 1, name: 'admin', pass: 'admin', role: 'admin', allowedCategory: '*', sessionToken: 'admin_test_session_token' }
     ]
 };
-
-// Подключение к внешней базе данных MongoDB
-if (MONGODB_URI) {
-    mongoose.connect(MONGODB_URI)
-        .then(() => {
-            isDbConnected = true;
-            console.log('Успешное подключение к MongoDB');
-        })
-        .catch(err => {
-            console.error('Ошибка подключения к MongoDB:', err);
-        });
-} else {
-    console.warn('Предупреждение: Переменная MONGODB_URI отсутствует. Данные будут храниться временно в ОЗУ.');
-}
 
 // Схемы данных Mongoose для базы данных
 const UserSchema = new mongoose.Schema({
@@ -58,7 +49,8 @@ const UserSchema = new mongoose.Schema({
     name: String,
     pass: String,
     role: String,
-    allowedCategory: String
+    allowedCategory: String,
+    sessionToken: String // Хранилище сессии без передачи пароля
 });
 
 const ArticleSchema = new mongoose.Schema({
@@ -90,7 +82,40 @@ const UserModel = mongoose.models.User || mongoose.model('User', UserSchema);
 const ArticleModel = mongoose.models.Article || mongoose.model('Article', ArticleSchema);
 const SystemStateModel = mongoose.models.SystemState || mongoose.model('SystemState', SystemStateSchema);
 
-// Получение глобальных настроек сайта из базы
+// Автоматический сидинг (создание дефолтного админа при пустой базе)
+async function seedAdmin() {
+    try {
+        const adminCount = await UserModel.countDocuments({ role: 'admin' });
+        if (adminCount === 0) {
+            await UserModel.create({
+                id: 1,
+                name: 'admin',
+                pass: 'admin',
+                role: 'admin',
+                allowedCategory: '*',
+                sessionToken: generateSessionToken()
+            });
+            console.log('Дефолтный суперадмин успешно создан (логин: admin, пароль: admin)');
+        }
+    } catch (e) {
+        console.error('Ошибка создания дефолтного админа:', e);
+    }
+}
+
+// Подключение к внешней базе данных MongoDB
+if (MONGODB_URI) {
+    mongoose.connect(MONGODB_URI)
+        .then(async () => {
+            isDbConnected = true;
+            console.log('Успешное подключение к MongoDB');
+            await seedAdmin(); // Инициализируем создание админа
+        })
+        .catch(err => {
+            console.error('Ошибка подключения к MongoDB:', err);
+        });
+}
+
+// Получение общих настроек системы
 async function getSystemState() {
     if (isDbConnected) {
         let state = await SystemStateModel.findOne({ key: 'main_state' });
@@ -108,39 +133,20 @@ async function getSystemState() {
     return localDb;
 }
 
-// Проверка сессии/пароля пользователя
-async function verifyUser(name, pass) {
+// Проверка сессии по уникальному токену
+async function verifySession(sessionToken) {
+    if (!sessionToken) return null;
     if (isDbConnected) {
-        return await UserModel.findOne({ name, pass });
+        return await UserModel.findOne({ sessionToken });
     }
-    return localDb.users.find(u => u.name === name && u.pass === pass);
-}
-
-// Проверка криптографической подписи Telegram
-function verifyTelegramHash(authData, botToken) {
-    const { hash, ...dataToCheck } = authData;
-
-    const dataCheckString = Object.keys(dataToCheck)
-        .sort()
-        .map(key => `${key}=${dataToCheck[key]}`)
-        .join('\n');
-
-    const secretKey = crypto.createHash('sha256')
-        .update(botToken)
-        .digest();
-
-    const calculatedHash = crypto.createHmac('sha256', secretKey)
-        .update(dataCheckString)
-        .digest('hex');
-
-    return calculatedHash === hash;
+    return localDb.users.find(u => u.sessionToken === sessionToken);
 }
 
 // =========================================================================
 // МАРШРУТЫ КЛИЕНТСКОЙ ЧАСТИ
 // =========================================================================
 
-// Запрос общих данных сайта при загрузке страницы
+// Запрос основных данных для сайта
 app.get('/api/data', async (req, res) => {
     try {
         const state = await getSystemState();
@@ -164,34 +170,53 @@ app.get('/api/data', async (req, res) => {
     }
 });
 
-// Традиционный вход по логину/паролю
+// Классическая авторизация по логину и паролю
 app.post('/api/login', async (req, res) => {
-    const { name, pass } = req.body;
-    const user = await verifyUser(name, pass);
-    if (user) {
-        res.json({ success: true, user });
-    } else {
-        res.status(401).json({ success: false, error: 'Неверные авторизационные данные.' });
+    try {
+        const { name, pass } = req.body;
+        let user = null;
+
+        if (isDbConnected) {
+            user = await UserModel.findOne({ name, pass });
+            if (user) {
+                user.sessionToken = generateSessionToken();
+                await user.save();
+            }
+        } else {
+            user = localDb.users.find(u => u.name === name && u.pass === pass);
+            if (user) {
+                user.sessionToken = generateSessionToken();
+            }
+        }
+
+        if (user) {
+            res.json({ success: true, user });
+        } else {
+            res.status(401).json({ success: false, error: 'Неверные имя пользователя или пароль.' });
+        }
+    } catch (e) {
+        res.status(500).json({ success: false, error: e.message });
     }
 });
 
-// Авторизация и регистрация через Telegram Login Widget
+// Авторизация через Telegram Login Widget
 app.post('/api/login-tg', async (req, res) => {
     try {
         const authData = req.body;
         const isValid = verifyTelegramHash(authData, BOT_TOKEN);
 
         if (!isValid) {
-            return res.status(401).json({ success: false, error: 'Подпись данных некорректна.' });
+            return res.status(401).json({ success: false, error: 'Ошибка верификации подписи.' });
         }
 
         const now = Math.floor(Date.now() / 1000);
         if (now - parseInt(authData.auth_date) > 86400) {
-            return res.status(401).json({ success: false, error: 'Срок действия сессии авторизации истек.' });
+            return res.status(401).json({ success: false, error: 'Время авторизации истекло.' });
         }
 
         const tgId = authData.id;
         const username = authData.username || authData.first_name || `user_${tgId}`;
+        const newSessionToken = generateSessionToken();
 
         let user;
         if (isDbConnected) {
@@ -202,8 +227,12 @@ app.post('/api/login-tg', async (req, res) => {
                     name: username,
                     pass: Math.random().toString(36).substring(2, 8),
                     role: 'reader',
-                    allowedCategory: '*'
+                    allowedCategory: '*',
+                    sessionToken: newSessionToken
                 });
+            } else {
+                user.sessionToken = newSessionToken;
+                await user.save();
             }
         } else {
             user = localDb.users.find(u => u.id === tgId);
@@ -213,30 +242,33 @@ app.post('/api/login-tg', async (req, res) => {
                     name: username,
                     pass: Math.random().toString(36).substring(2, 8),
                     role: 'reader',
-                    allowedCategory: '*'
+                    allowedCategory: '*',
+                    sessionToken: newSessionToken
                 };
                 localDb.users.push(user);
+            } else {
+                user.sessionToken = newSessionToken;
             }
         }
 
         res.json({ success: true, user });
     } catch (e) {
-        res.status(500).json({ error: 'Ошибка при авторизации через Telegram: ' + e.message });
+        res.status(500).json({ error: 'Ошибка авторизации Telegram: ' + e.message });
     }
 });
 
-// Сохранение новой статьи или редактирование существующей
+// Добавление новой статьи или её обновление
 app.post('/api/articles', async (req, res) => {
     try {
-        const { username, pass, id, title, cat, cover, content, isFeatured, tags } = req.body;
-        const user = await verifyUser(username, pass);
+        const { sessionToken, id, title, cat, cover, content, isFeatured, tags } = req.body;
+        const user = await verifySession(sessionToken);
 
         if (!user || (user.role !== 'admin' && user.role !== 'author')) {
-            return res.status(403).json({ error: 'Доступ запрещен.' });
+            return res.status(403).json({ error: 'Недостаточно прав для выполнения операции.' });
         }
 
         if (user.role === 'author' && user.allowedCategory !== '*' && user.allowedCategory !== cat) {
-            return res.status(403).json({ error: 'Доступ ограничен рамками вашей разрешенной категории.' });
+            return res.status(403).json({ error: 'Вам запрещено публиковать статьи в выбранную категорию.' });
         }
 
         const articleId = id ? parseInt(id) : Date.now();
@@ -248,7 +280,7 @@ app.post('/api/articles', async (req, res) => {
             cat,
             cover,
             content,
-            author: username,
+            author: user.name,
             status,
             tags,
             isFeatured: user.role === 'admin' ? !!isFeatured : false
@@ -285,7 +317,7 @@ app.post('/api/articles', async (req, res) => {
     }
 });
 
-// Оценка (голосование) статьи звездами (доступно гостям без аккаунта)
+// Оценка (голосование) статьи звездами
 app.post('/api/articles/rate', async (req, res) => {
     try {
         const { id, voterId, val } = req.body;
@@ -318,14 +350,14 @@ app.post('/api/articles/rate', async (req, res) => {
 });
 
 // =========================================================================
-// АДМИНИСТРАТИВНЫЕ МАРШРУТЫ (ТРЕБУЕТСЯ СУПЕРАДМИН)
+// АДМИНИСТРАТИВНЫЕ МАРШРУТЫ (ТРЕБУЕТСЯ РОЛЬ ADMIN)
 // =========================================================================
 
-// Запрос полного списка данных для админ-панели (включая неодобренные статьи)
+// Запрос полного списка данных для админ-панели
 app.post('/api/admin/data', async (req, res) => {
     try {
-        const { name, pass } = req.body;
-        const user = await verifyUser(name, pass);
+        const { sessionToken } = req.body;
+        const user = await verifySession(sessionToken);
 
         if (!user || user.role !== 'admin') {
             return res.status(403).json({ error: 'Доступ запрещен.' });
@@ -355,11 +387,11 @@ app.post('/api/admin/data', async (req, res) => {
     }
 });
 
-// Одобрение (публикация) или отклонение (удаление) предложенной статьи
+// Одобрение статьи (публикация) или отклонение
 app.post('/api/articles/moderate', async (req, res) => {
     try {
-        const { username, pass, id, status } = req.body;
-        const user = await verifyUser(username, pass);
+        const { sessionToken, id, status } = req.body;
+        const user = await verifySession(sessionToken);
 
         if (!user || user.role !== 'admin') {
             return res.status(403).json({ error: 'Доступ запрещен.' });
@@ -386,11 +418,11 @@ app.post('/api/articles/moderate', async (req, res) => {
     }
 });
 
-// Сохранение обновленного текста правил
+// Сохранение отредактированных правил сообщества
 app.post('/api/rules', async (req, res) => {
     try {
-        const { username, pass, rules } = req.body;
-        const user = await verifyUser(username, pass);
+        const { sessionToken, rules } = req.body;
+        const user = await verifySession(sessionToken);
 
         if (!user || user.role !== 'admin') {
             return res.status(403).json({ error: 'Доступ запрещен.' });
@@ -408,11 +440,11 @@ app.post('/api/rules', async (req, res) => {
     }
 });
 
-// Создание или обновление учетной записи пользователя
+// Создание или обновление учетных записей пользователей
 app.post('/api/users/save', async (req, res) => {
     try {
-        const { username, pass, targetUserId, name, userPass, role, allowedCategory } = req.body;
-        const admin = await verifyUser(username, pass);
+        const { sessionToken, targetUserId, name, userPass, role, allowedCategory } = req.body;
+        const admin = await verifySession(sessionToken);
 
         if (!admin || admin.role !== 'admin') {
             return res.status(403).json({ error: 'Доступ запрещен.' });
@@ -431,6 +463,7 @@ app.post('/api/users/save', async (req, res) => {
             if (targetUserId) {
                 await UserModel.findOneAndUpdate({ id: userId }, userData);
             } else {
+                userData.sessionToken = generateSessionToken();
                 await UserModel.create(userData);
             }
         } else {
@@ -438,6 +471,7 @@ app.post('/api/users/save', async (req, res) => {
                 const idx = localDb.users.findIndex(u => u.id === userId);
                 if (idx !== -1) localDb.users[idx] = userData;
             } else {
+                userData.sessionToken = generateSessionToken();
                 localDb.users.push(userData);
             }
         }
@@ -451,8 +485,8 @@ app.post('/api/users/save', async (req, res) => {
 // Удаление аккаунта пользователя
 app.post('/api/users/delete', async (req, res) => {
     try {
-        const { username, pass, targetUserId } = req.body;
-        const admin = await verifyUser(username, pass);
+        const { sessionToken, targetUserId } = req.body;
+        const admin = await verifySession(sessionToken);
 
         if (!admin || admin.role !== 'admin') {
             return res.status(403).json({ error: 'Доступ запрещен.' });
@@ -474,11 +508,11 @@ app.post('/api/users/delete', async (req, res) => {
     }
 });
 
-// Создание новой категории
+// Добавление новой категории
 app.post('/api/cats/add', async (req, res) => {
     try {
-        const { username, pass, catName } = req.body;
-        const user = await verifyUser(username, pass);
+        const { sessionToken, catName } = req.body;
+        const user = await verifySession(sessionToken);
 
         if (!user || user.role !== 'admin') return res.status(403).json({ error: 'Доступ запрещен.' });
 
@@ -496,11 +530,11 @@ app.post('/api/cats/add', async (req, res) => {
     }
 });
 
-// Удаление категории статей
+// Удаление категории
 app.post('/api/cats/delete', async (req, res) => {
     try {
-        const { username, pass, catName } = req.body;
-        const user = await verifyUser(username, pass);
+        const { sessionToken, catName } = req.body;
+        const user = await verifySession(sessionToken);
 
         if (!user || user.role !== 'admin') return res.status(403).json({ error: 'Доступ запрещен.' });
         if (catName === 'Главная') return res.status(400).json({ error: 'Категория "Главная" не может быть удалена.' });
@@ -522,11 +556,11 @@ app.post('/api/cats/delete', async (req, res) => {
     }
 });
 
-// Создание нового тега
+// Добавление нового тега
 app.post('/api/tags/add', async (req, res) => {
     try {
-        const { username, pass, tagName } = req.body;
-        const user = await verifyUser(username, pass);
+        const { sessionToken, tagName } = req.body;
+        const user = await verifySession(sessionToken);
 
         if (!user || user.role !== 'admin') return res.status(403).json({ error: 'Доступ запрещен.' });
 
@@ -549,8 +583,8 @@ app.post('/api/tags/add', async (req, res) => {
 // Удаление тега из системы
 app.post('/api/tags/delete', async (req, res) => {
     try {
-        const { username, pass, tagName } = req.body;
-        const user = await verifyUser(username, pass);
+        const { sessionToken, tagName } = req.body;
+        const user = await verifySession(sessionToken);
 
         if (!user || user.role !== 'admin') return res.status(403).json({ error: 'Доступ запрещен.' });
 
@@ -576,8 +610,8 @@ app.post('/api/tags/delete', async (req, res) => {
 // Изменение показателей "Состояния сердца"
 app.post('/api/heart/save', async (req, res) => {
     try {
-        const { username, pass, hp, act, size } = req.body;
-        const user = await verifyUser(username, pass);
+        const { sessionToken, hp, act, size } = req.body;
+        const user = await verifySession(sessionToken);
 
         if (!user || user.role !== 'admin') {
             return res.status(403).json({ error: 'Доступ запрещен.' });
