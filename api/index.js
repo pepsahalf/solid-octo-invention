@@ -7,18 +7,15 @@ const app = express();
 app.use(express.json({ limit: '10mb' })); 
 app.use(cors());
 
-// Токен вашего бота и адрес базы данных
 const BOT_TOKEN = process.env.BOT_TOKEN || '8709224223:AAGU74o3Wh1oHFdAK24cpXQwiGO725_S4aM';
 const MONGODB_URI = process.env.MONGODB_URI;
 
 let isDbConnected = false;
 
-// Генератор случайных безопасных токенов сессий
 function generateSessionToken() {
     return crypto.randomBytes(16).toString('hex');
 }
 
-// Локальное хранилище данных (резерв на случай отсутствия MongoDB)
 let localDb = {
     cats: ['Главная', 'Архив', 'Ритуалы', 'Существа', 'История', 'Рассказы', 'Термины', 'Артефакты'],
     availableTags: ['сущность', 'аномалия', 'растение', 'опасность', 'локация', 'ритуал', 'еда', 'животное', 'люди', 'Fonés', 'Кораст'],
@@ -43,14 +40,13 @@ let localDb = {
     ]
 };
 
-// Схемы данных Mongoose для базы данных
 const UserSchema = new mongoose.Schema({
     id: { type: Number, unique: true },
     name: String,
     pass: String,
     role: String,
     allowedCategory: String,
-    sessionToken: String // Хранилище сессии без передачи пароля
+    sessionToken: String
 });
 
 const ArticleSchema = new mongoose.Schema({
@@ -82,7 +78,6 @@ const UserModel = mongoose.models.User || mongoose.model('User', UserSchema);
 const ArticleModel = mongoose.models.Article || mongoose.model('Article', ArticleSchema);
 const SystemStateModel = mongoose.models.SystemState || mongoose.model('SystemState', SystemStateSchema);
 
-// Автоматический сидинг (создание дефолтного админа при пустой базе)
 async function seedAdmin() {
     try {
         const adminCount = await UserModel.countDocuments({ role: 'admin' });
@@ -102,20 +97,18 @@ async function seedAdmin() {
     }
 }
 
-// Подключение к внешней базе данных MongoDB
 if (MONGODB_URI) {
     mongoose.connect(MONGODB_URI)
         .then(async () => {
             isDbConnected = true;
             console.log('Успешное подключение к MongoDB');
-            await seedAdmin(); // Инициализируем создание админа
+            await seedAdmin();
         })
         .catch(err => {
             console.error('Ошибка подключения к MongoDB:', err);
         });
 }
 
-// Получение общих настроек системы
 async function getSystemState() {
     if (isDbConnected) {
         let state = await SystemStateModel.findOne({ key: 'main_state' });
@@ -133,7 +126,6 @@ async function getSystemState() {
     return localDb;
 }
 
-// Проверка сессии по уникальному токену
 async function verifySession(sessionToken) {
     if (!sessionToken) return null;
     if (isDbConnected) {
@@ -142,11 +134,25 @@ async function verifySession(sessionToken) {
     return localDb.users.find(u => u.sessionToken === sessionToken);
 }
 
-// =========================================================================
-// МАРШРУТЫ КЛИЕНТСКОЙ ЧАСТИ
-// =========================================================================
+function verifyTelegramHash(authData, botToken) {
+    const { hash, ...dataToCheck } = authData;
 
-// Запрос основных данных для сайта
+    const dataCheckString = Object.keys(dataToCheck)
+        .sort()
+        .map(key => `${key}=${dataToCheck[key]}`)
+        .join('\n');
+
+    const secretKey = crypto.createHash('sha256')
+        .update(botToken)
+        .digest();
+
+    const calculatedHash = crypto.createHmac('sha256', secretKey)
+        .update(dataCheckString)
+        .digest('hex');
+
+    return calculatedHash === hash;
+}
+
 app.get('/api/data', async (req, res) => {
     try {
         const state = await getSystemState();
@@ -170,7 +176,6 @@ app.get('/api/data', async (req, res) => {
     }
 });
 
-// Классическая авторизация по логину и паролю
 app.post('/api/login', async (req, res) => {
     try {
         const { name, pass } = req.body;
@@ -199,7 +204,6 @@ app.post('/api/login', async (req, res) => {
     }
 });
 
-// Авторизация через Telegram Login Widget
 app.post('/api/login-tg', async (req, res) => {
     try {
         const authData = req.body;
@@ -226,7 +230,7 @@ app.post('/api/login-tg', async (req, res) => {
                     id: tgId,
                     name: username,
                     pass: Math.random().toString(36).substring(2, 8),
-                    role: 'reader',
+                    role: 'author',
                     allowedCategory: '*',
                     sessionToken: newSessionToken
                 });
@@ -241,7 +245,7 @@ app.post('/api/login-tg', async (req, res) => {
                     id: tgId,
                     name: username,
                     pass: Math.random().toString(36).substring(2, 8),
-                    role: 'reader',
+                    role: 'author',
                     allowedCategory: '*',
                     sessionToken: newSessionToken
                 };
@@ -257,7 +261,6 @@ app.post('/api/login-tg', async (req, res) => {
     }
 });
 
-// Добавление новой статьи или её обновление
 app.post('/api/articles', async (req, res) => {
     try {
         const { sessionToken, id, title, cat, cover, content, isFeatured, tags } = req.body;
@@ -317,7 +320,6 @@ app.post('/api/articles', async (req, res) => {
     }
 });
 
-// Оценка (голосование) статьи звездами
 app.post('/api/articles/rate', async (req, res) => {
     try {
         const { id, voterId, val } = req.body;
@@ -349,11 +351,6 @@ app.post('/api/articles/rate', async (req, res) => {
     }
 });
 
-// =========================================================================
-// АДМИНИСТРАТИВНЫЕ МАРШРУТЫ (ТРЕБУЕТСЯ РОЛЬ ADMIN)
-// =========================================================================
-
-// Запрос полного списка данных для админ-панели
 app.post('/api/admin/data', async (req, res) => {
     try {
         const { sessionToken } = req.body;
@@ -387,7 +384,6 @@ app.post('/api/admin/data', async (req, res) => {
     }
 });
 
-// Одобрение статьи (публикация) или отклонение
 app.post('/api/articles/moderate', async (req, res) => {
     try {
         const { sessionToken, id, status } = req.body;
@@ -418,7 +414,6 @@ app.post('/api/articles/moderate', async (req, res) => {
     }
 });
 
-// Сохранение отредактированных правил сообщества
 app.post('/api/rules', async (req, res) => {
     try {
         const { sessionToken, rules } = req.body;
@@ -440,7 +435,6 @@ app.post('/api/rules', async (req, res) => {
     }
 });
 
-// Создание или обновление учетных записей пользователей
 app.post('/api/users/save', async (req, res) => {
     try {
         const { sessionToken, targetUserId, name, userPass, role, allowedCategory } = req.body;
@@ -482,7 +476,6 @@ app.post('/api/users/save', async (req, res) => {
     }
 });
 
-// Удаление аккаунта пользователя
 app.post('/api/users/delete', async (req, res) => {
     try {
         const { sessionToken, targetUserId } = req.body;
@@ -508,7 +501,6 @@ app.post('/api/users/delete', async (req, res) => {
     }
 });
 
-// Добавление новой категории
 app.post('/api/cats/add', async (req, res) => {
     try {
         const { sessionToken, catName } = req.body;
@@ -530,7 +522,6 @@ app.post('/api/cats/add', async (req, res) => {
     }
 });
 
-// Удаление категории
 app.post('/api/cats/delete', async (req, res) => {
     try {
         const { sessionToken, catName } = req.body;
@@ -556,7 +547,6 @@ app.post('/api/cats/delete', async (req, res) => {
     }
 });
 
-// Добавление нового тега
 app.post('/api/tags/add', async (req, res) => {
     try {
         const { sessionToken, tagName } = req.body;
@@ -580,7 +570,6 @@ app.post('/api/tags/add', async (req, res) => {
     }
 });
 
-// Удаление тега из системы
 app.post('/api/tags/delete', async (req, res) => {
     try {
         const { sessionToken, tagName } = req.body;
@@ -607,7 +596,6 @@ app.post('/api/tags/delete', async (req, res) => {
     }
 });
 
-// Изменение показателей "Состояния сердца"
 app.post('/api/heart/save', async (req, res) => {
     try {
         const { sessionToken, hp, act, size } = req.body;
@@ -635,7 +623,6 @@ app.post('/api/heart/save', async (req, res) => {
     }
 });
 
-// Запуск сервера в локальной Node-среде (вне Vercel)
 if (process.env.NODE_ENV !== 'production') {
     const PORT = process.env.PORT || 3000;
     app.listen(PORT, () => {
